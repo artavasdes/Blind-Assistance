@@ -40,6 +40,22 @@ labelMap = [
     "teddy bear",     "hair drier", "toothbrush"
 ]
 
+#detection weights for dangerous objects
+#scale of 1-10
+detection_weights = {
+    "person": 5,
+    "bicycle": 7,    
+    "car": 10,           
+    "motorbike": 9,       
+    "bus": 10,           
+    "train": 10,
+    "truck": 10,          
+    "fire hydrant": 3, 
+    "parking meter": 3, 
+    "bench": 3,
+    "dog": 4, 
+}
+
 #Out of 10
 #TODO Create tuples as values, first val for normal and second for urgent weight
 objectPriorityWeights = {
