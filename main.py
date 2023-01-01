@@ -174,6 +174,9 @@ with dai.Device(pipeline) as device:
 
         detections = inDet.detections
 
+        #List for tracking all objects detected in each frame
+        detected_frame_objects = []
+
         # If the frame is available, draw bounding boxes on it and show the frame
         height = frame.shape[0]
         width  = frame.shape[1]
@@ -196,6 +199,7 @@ with dai.Device(pipeline) as device:
             y2 = int(detection.ymax * height)
             try:
                 label = labelMap[detection.label]
+                detected_frame_objects.append(label)
             except:
                 label = detection.label
             cv2.putText(frame, str(label), (x1 + 10, y1 + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
@@ -204,29 +208,39 @@ with dai.Device(pipeline) as device:
             cv2.putText(frame, f"Y: {int(detection.spatialCoordinates.y)} mm", (x1 + 10, y1 + 65), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
             cv2.putText(frame, f"Z: {int(detection.spatialCoordinates.z)} mm", (x1 + 10, y1 + 80), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
             
-            #HFOV: 68.7938003540039
-            #Direction
-            
-            #TODO, make a center direction for low degrees !!!
-            #TODO, create a dictionary of labels and values assigning weights to different objects and which one takes priority for alerting the user
-            #TODO find movement of object by how fast it moves in pixels, ex: if car is moving fast then alert immediatley
-            if label == "person":
-                count += 1
-            if label == "person" and count == 1:
-                object_x_average = ((xmin + xmin)/2)/width
-                direction = (object_x_average * calibData.getFov(dai.CameraBoardSocket.RGB)) - (calibData.getFov(dai.CameraBoardSocket.RGB)/2)
-                if direction < -15:
-                    body_rel_direction = "left"
-                elif direction > 15:
-                    body_rel_direction = "right"
-                else:
-                    body_rel_direction = "center"
-                audio = "text_to_speech.mp3"
-                speech.direction_distance(audio, round((detection.spatialCoordinates.z/1000),2), abs(round(direction)), "person", body_rel_direction)
-                speech.speed_setter(audio, 2)
-                speech.play_audio(audio)
-
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, cv2.FONT_HERSHEY_SIMPLEX)
+
+        #HFOV: 68.7938003540039
+        
+        #TODO, make a center direction for low degrees !!!
+        #TODO, create a dictionary of labels and values assigning weights to different objects and which one takes priority for alerting the user
+        #TODO find movement of object by how fast it moves in pixels, ex: if car is moving fast then alert immediatley
+        
+              
+        #Searches for highest priority object detected
+        highest_priority_obj = (None, 0)
+        for label in detected_frame_objects:
+            if label in detection_weights and detection_weights[label] > highest_priority_obj[1]:
+                highest_priority_obj = (label, detection_weights[label]) 
+
+
+        if highest_priority_obj[0] is not None and count == 0:
+            object_x_average = ((xmin + xmin)/2)/width
+            direction = (object_x_average * calibData.getFov(dai.CameraBoardSocket.RGB)) - (calibData.getFov(dai.CameraBoardSocket.RGB)/2)
+            if direction < -15:
+                body_rel_direction = "left"
+            elif direction > 15:
+                body_rel_direction = "right"
+            else:
+                body_rel_direction = "center"
+            audio = "text_to_speech.mp3"
+            speech.direction_distance(audio, round((detection.spatialCoordinates.z/1000),2), abs(round(direction)), highest_priority_obj[0], body_rel_direction)
+            print(speech.get_duration(audio))
+            #speech.speed_setter(audio, 2)
+            speech.play_audio(audio)
+
+            count = count + 1
+
 
         cv2.putText(frame, "NN fps: {:.2f}".format(fps), (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, color)
         cv2.imshow("depth", depthFrameColor)

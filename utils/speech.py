@@ -1,5 +1,6 @@
 from gtts import gTTS
 import os
+from mutagen.mp3 import MP3
 from pydub.playback import play
 from pydub import AudioSegment
 import multiprocessing
@@ -43,8 +44,12 @@ def volume_setter(filename, volume):
     volume_changed = (audio + volume)
     volume_changed.export("temp/" + filename, format = "mp3")
 
+def get_duration(filename):
+    audio = MP3("temp/" + filename)
+    return audio.info.length
+
 def play_audio(filename):
-    #p = multiprocessing.Process(target=playsound, args=("temp/" + filename,))
+    #p = multiprocessing.Process(target=playsound, args=("temp/" + filename, True))
     #p.start()
     playsound("temp/" + filename, True)
     #p.terminate()
