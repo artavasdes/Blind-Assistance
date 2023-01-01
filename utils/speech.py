@@ -1,6 +1,8 @@
 from gtts import gTTS
 import os
 from mutagen.mp3 import MP3
+import asyncio
+
 from pydub.playback import play
 from pydub import AudioSegment
 import multiprocessing
@@ -34,9 +36,7 @@ def speed_setter(filename, speed):
 
 # def speed_setter(filename, speed):
 #     song, fs = librosa.load("temp/" + filename)
-
 #     song_2_times_faster = librosa.effects.time_stretch(song, rate = speed)
-
 #     scipy.io.wavfile.write("temp/" + filename, fs, song_2_times_faster)
 
 def volume_setter(filename, volume):
@@ -49,8 +49,8 @@ def get_duration(filename):
     return audio.info.length
 
 def play_audio(filename):
-    #p = multiprocessing.Process(target=playsound, args=("temp/" + filename, True))
-    #p.start()
     playsound("temp/" + filename, True)
-    #p.terminate()
     os.remove("temp/" + filename)
+
+# def timer():
+#     pass

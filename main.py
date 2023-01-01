@@ -5,7 +5,9 @@ import depthai as dai
 import numpy as np
 import time
 import os
+import asyncio
 from utils import speech, gmaps
+import multiprocessing
 
 '''
 Spatial Tiny-yolo example
@@ -57,6 +59,9 @@ detection_weights = {
 }
 
 syncNN = True
+
+#Boolean for setting if audio multiprocess is done
+audio_alive = False
 
 # Create pipeline
 pipeline = dai.Pipeline()
@@ -128,123 +133,150 @@ stereo.depth.link(spatialDetectionNetwork.inputDepth)
 spatialDetectionNetwork.passthroughDepth.link(xoutDepth.input)
 spatialDetectionNetwork.outNetwork.link(nnNetworkOut.input)
 
-# Connect to device and start pipeline
-with dai.Device(pipeline) as device:
-    calibData = device.readCalibration()
+def main():
+    # Connect to device and start pipeline
+    with dai.Device(pipeline) as device:
+        calibData = device.readCalibration()
 
-    # Output queues will be used to get the rgb frames and nn data from the outputs defined above
-    previewQueue = device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
-    detectionNNQueue = device.getOutputQueue(name="detections", maxSize=4, blocking=False)
-    depthQueue = device.getOutputQueue(name="depth", maxSize=4, blocking=False)
-    networkQueue = device.getOutputQueue(name="nnNetwork", maxSize=4, blocking=False);
+        # Output queues will be used to get the rgb frames and nn data from the outputs defined above
+        previewQueue = device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
+        detectionNNQueue = device.getOutputQueue(name="detections", maxSize=4, blocking=False)
+        depthQueue = device.getOutputQueue(name="depth", maxSize=4, blocking=False)
+        networkQueue = device.getOutputQueue(name="nnNetwork", maxSize=4, blocking=False);
 
-    startTime = time.monotonic()
-    counter = 0
-    fps = 0
-    color = (255, 255, 255)
-    printOutputLayersOnce = True
+        startTime = time.monotonic()
+        counter = 0
+        fps = 0
+        color = (255, 255, 255)
+        printOutputLayersOnce = True
 
-    count = 0
-    while True:
-        inPreview = previewQueue.get()
-        inDet = detectionNNQueue.get()
-        depth = depthQueue.get()
-        inNN = networkQueue.get()
+        loop_iter = 0
+        while True:
+            inPreview = previewQueue.get()
+            inDet = detectionNNQueue.get()
+            depth = depthQueue.get()
+            inNN = networkQueue.get()
 
-        if printOutputLayersOnce:
-            toPrint = 'Output layer names:'
-            for ten in inNN.getAllLayerNames():
-                toPrint = f'{toPrint} {ten},'
-            print(toPrint)
-            printOutputLayersOnce = False;
+            if printOutputLayersOnce:
+                toPrint = 'Output layer names:'
+                for ten in inNN.getAllLayerNames():
+                    toPrint = f'{toPrint} {ten},'
+                print(toPrint)
+                printOutputLayersOnce = False;
 
-        frame = inPreview.getCvFrame()
-        depthFrame = depth.getFrame() # depthFrame values are in millimeters
+            frame = inPreview.getCvFrame()
+            depthFrame = depth.getFrame() # depthFrame values are in millimeters
 
-        depthFrameColor = cv2.normalize(depthFrame, None, 255, 0, cv2.NORM_INF, cv2.CV_8UC1)
-        depthFrameColor = cv2.equalizeHist(depthFrameColor)
-        depthFrameColor = cv2.applyColorMap(depthFrameColor, cv2.COLORMAP_HOT)
+            depthFrameColor = cv2.normalize(depthFrame, None, 255, 0, cv2.NORM_INF, cv2.CV_8UC1)
+            depthFrameColor = cv2.equalizeHist(depthFrameColor)
+            depthFrameColor = cv2.applyColorMap(depthFrameColor, cv2.COLORMAP_HOT)
 
-        counter+=1
-        current_time = time.monotonic()
-        if (current_time - startTime) > 1 :
-            fps = counter / (current_time - startTime)
-            counter = 0
-            startTime = current_time
+            counter+=1
+            current_time = time.monotonic()
+            if (current_time - startTime) > 1 :
+                fps = counter / (current_time - startTime)
+                counter = 0
+                startTime = current_time
 
-        detections = inDet.detections
+            detections = inDet.detections
 
-        #List for tracking all objects detected in each frame
-        detected_frame_objects = []
+            #List for tracking all objects detected in each frame
+            detected_frame_objects = []
 
-        # If the frame is available, draw bounding boxes on it and show the frame
-        height = frame.shape[0]
-        width  = frame.shape[1]
-        for detection in detections:
-            roiData = detection.boundingBoxMapping
-            roi = roiData.roi
-            roi = roi.denormalize(depthFrameColor.shape[1], depthFrameColor.shape[0])
-            topLeft = roi.topLeft()
-            bottomRight = roi.bottomRight()
-            xmin = int(topLeft.x)
-            ymin = int(topLeft.y)
-            xmax = int(bottomRight.x)
-            ymax = int(bottomRight.y)
-            cv2.rectangle(depthFrameColor, (xmin, ymin), (xmax, ymax), color, cv2.FONT_HERSHEY_SCRIPT_SIMPLEX)
+            # If the frame is available, draw bounding boxes on it and show the frame
+            height = frame.shape[0]
+            width  = frame.shape[1]
+            for detection in detections:
+                roiData = detection.boundingBoxMapping
+                roi = roiData.roi
+                roi = roi.denormalize(depthFrameColor.shape[1], depthFrameColor.shape[0])
+                topLeft = roi.topLeft()
+                bottomRight = roi.bottomRight()
+                xmin = int(topLeft.x)
+                ymin = int(topLeft.y)
+                xmax = int(bottomRight.x)
+                ymax = int(bottomRight.y)
+                cv2.rectangle(depthFrameColor, (xmin, ymin), (xmax, ymax), color, cv2.FONT_HERSHEY_SCRIPT_SIMPLEX)
 
-            # Denormalize bounding box
-            x1 = int(detection.xmin * width)
-            x2 = int(detection.xmax * width)
-            y1 = int(detection.ymin * height)
-            y2 = int(detection.ymax * height)
-            try:
-                label = labelMap[detection.label]
-                detected_frame_objects.append(label)
-            except:
-                label = detection.label
-            cv2.putText(frame, str(label), (x1 + 10, y1 + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-            cv2.putText(frame, "{:.2f}".format(detection.confidence*100), (x1 + 10, y1 + 35), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-            cv2.putText(frame, f"X: {int(detection.spatialCoordinates.x)} mm", (x1 + 10, y1 + 50), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-            cv2.putText(frame, f"Y: {int(detection.spatialCoordinates.y)} mm", (x1 + 10, y1 + 65), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
-            cv2.putText(frame, f"Z: {int(detection.spatialCoordinates.z)} mm", (x1 + 10, y1 + 80), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+                # Denormalize bounding box
+                x1 = int(detection.xmin * width)
+                x2 = int(detection.xmax * width)
+                y1 = int(detection.ymin * height)
+                y2 = int(detection.ymax * height)
+                try:
+                    label = labelMap[detection.label]
+                    detected_frame_objects.append(label)
+                except:
+                    label = detection.label
+                cv2.putText(frame, str(label), (x1 + 10, y1 + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+                cv2.putText(frame, "{:.2f}".format(detection.confidence*100), (x1 + 10, y1 + 35), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+                cv2.putText(frame, f"X: {int(detection.spatialCoordinates.x)} mm", (x1 + 10, y1 + 50), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+                cv2.putText(frame, f"Y: {int(detection.spatialCoordinates.y)} mm", (x1 + 10, y1 + 65), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+                cv2.putText(frame, f"Z: {int(detection.spatialCoordinates.z)} mm", (x1 + 10, y1 + 80), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
+                
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, cv2.FONT_HERSHEY_SIMPLEX)
+
+            #HFOV: 68.7938003540039
             
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, cv2.FONT_HERSHEY_SIMPLEX)
-
-        #HFOV: 68.7938003540039
-        
-        #TODO, make a center direction for low degrees !!!
-        #TODO, create a dictionary of labels and values assigning weights to different objects and which one takes priority for alerting the user
-        #TODO find movement of object by how fast it moves in pixels, ex: if car is moving fast then alert immediatley
-        
-              
-        #Searches for highest priority object detected
-        highest_priority_obj = (None, 0)
-        for label in detected_frame_objects:
-            if label in detection_weights and detection_weights[label] > highest_priority_obj[1]:
-                highest_priority_obj = (label, detection_weights[label]) 
+            #TODO, make a center direction for low degrees !!!
+            #TODO, create a dictionary of labels and values assigning weights to different objects and which one takes priority for alerting the user
+            #TODO find movement of object by how fast it moves in pixels, ex: if car is moving fast then alert immediatley
+            
+                
+            #Searches for highest priority object detected
+            highest_priority_obj = (None, 0)
+            for label in detected_frame_objects:
+                if label in detection_weights and detection_weights[label] > highest_priority_obj[1]:
+                    highest_priority_obj = (label, detection_weights[label]) 
 
 
-        if highest_priority_obj[0] is not None and count == 0:
-            object_x_average = ((xmin + xmin)/2)/width
-            direction = (object_x_average * calibData.getFov(dai.CameraBoardSocket.RGB)) - (calibData.getFov(dai.CameraBoardSocket.RGB)/2)
-            if direction < -15:
-                body_rel_direction = "left"
-            elif direction > 15:
-                body_rel_direction = "right"
-            else:
-                body_rel_direction = "center"
-            audio = "text_to_speech.mp3"
-            speech.direction_distance(audio, round((detection.spatialCoordinates.z/1000),2), abs(round(direction)), highest_priority_obj[0], body_rel_direction)
-            print(speech.get_duration(audio))
-            #speech.speed_setter(audio, 2)
-            speech.play_audio(audio)
+            if (highest_priority_obj[0] is not None and loop_iter == 0):
+                object_x_average = ((xmin + xmin)/2)/width
+                direction = (object_x_average * calibData.getFov(dai.CameraBoardSocket.RGB)) - (calibData.getFov(dai.CameraBoardSocket.RGB)/2)
+                if direction < -15:
+                    body_rel_direction = "left"
+                elif direction > 15:
+                    body_rel_direction = "right"
+                else:
+                    body_rel_direction = "center"
+                audio = "text_to_speech.mp3"
+                speech.direction_distance(audio, round((detection.spatialCoordinates.z/1000),2), abs(round(direction)), highest_priority_obj[0], body_rel_direction)
 
-            count = count + 1
+                print(speech.get_duration(audio))
+                #speech.speed_setter(audio, 2)
 
+                audio = multiprocessing.Process(target=speech.play_audio, args=((audio),))
+                audio.start()
 
-        cv2.putText(frame, "NN fps: {:.2f}".format(fps), (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, color)
-        cv2.imshow("depth", depthFrameColor)
-        cv2.imshow("rgb", frame)
+                loop_iter = loop_iter + 1
 
-        if cv2.waitKey(1) == ord('q'):
-            break
+            if "audio" in locals():
+                audio_alive = audio.is_alive()
+
+            if (highest_priority_obj[0] is not None and "audio" in locals() and audio_alive == False):
+                object_x_average = ((xmin + xmin)/2)/width
+                direction = (object_x_average * calibData.getFov(dai.CameraBoardSocket.RGB)) - (calibData.getFov(dai.CameraBoardSocket.RGB)/2)
+                if direction < -15:
+                    body_rel_direction = "left"
+                elif direction > 15:
+                    body_rel_direction = "right"
+                else:
+                    body_rel_direction = "center"
+                audio = "text_to_speech.mp3"
+                speech.direction_distance(audio, round((detection.spatialCoordinates.z/1000),2), abs(round(direction)), highest_priority_obj[0], body_rel_direction)
+
+                print(speech.get_duration(audio))
+                #speech.speed_setter(audio, 2)
+
+                audio = multiprocessing.Process(target=speech.play_audio, args=((audio),))
+                audio.start()
+
+            cv2.putText(frame, "NN fps: {:.2f}".format(fps), (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, color)
+            cv2.imshow("depth", depthFrameColor)
+            cv2.imshow("rgb", frame)
+
+            if cv2.waitKey(1) == ord('q'):
+                break
+
+if __name__ == "__main__":
+    main()
