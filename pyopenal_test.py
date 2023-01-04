@@ -13,7 +13,7 @@ from openal import oalOpen, Listener
 #from pyglet.media.drivers.openal import *
 
 if __name__ == "__main__":
-    x_pos = 50
+    x_pos = 5
     sleep_time = 5
 
     writer = Writer()
@@ -34,6 +34,7 @@ if __name__ == "__main__":
     source.play()
     listener = Listener()
     listener.set_position([0, 0, 0])
+    listener.set_gain(5)
 
     while True:
         #works with x, y, z
