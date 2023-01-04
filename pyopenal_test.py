@@ -25,9 +25,9 @@ if __name__ == "__main__":
     #writer.write_waves("temp/test_synthesis.wav", wave)
     
     
-    source = oalOpen("audio/bleep-long.wav")
 
 
+    source = oalOpen("temp/test_synthesis.wav")
 
     source.set_position([x_pos, 0, 0])
     source.set_looping(True)
