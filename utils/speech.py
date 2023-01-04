@@ -1,7 +1,6 @@
 from gtts import gTTS
 import os
 from mutagen.mp3 import MP3
-import asyncio
 
 from pydub.playback import play
 from pydub import AudioSegment
@@ -52,5 +51,3 @@ def play_audio(filename):
     playsound("temp/" + filename, True)
     os.remove("temp/" + filename)
 
-# def timer():
-#     pass
