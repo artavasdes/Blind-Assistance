@@ -43,7 +43,7 @@ mixer.pre_init(44100, -16, 2, 4096)
 audio = np.repeat(wave.reshape(size, 1), 2, axis = 1)
 
 print(audio)
-audio = pygame.sndarray.make_sound(wave)
+audio = pygame.sndarray.make_sound(audio)
 channel1 = mixer.Channel(0)
 channel1.play(audio)
 

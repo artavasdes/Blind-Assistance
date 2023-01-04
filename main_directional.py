@@ -1,3 +1,4 @@
+# Uses 3d positional audio to indicate location of objects
 from pathlib import Path
 import sys
 import cv2
@@ -5,7 +6,6 @@ import depthai as dai
 import numpy as np
 import time
 import os
-import asyncio
 from utils import speech, gmaps
 import multiprocessing
 
@@ -230,20 +230,17 @@ def main():
                     highest_priority_obj = (label, detection_weights[label]) 
 
 
+
+            #Audio file begins to play for anything in range of 0-2 meters
+
             if (highest_priority_obj[0] is not None and loop_iter == 0):
                 object_x_average = ((xmin + xmin)/2)/width
                 direction = (object_x_average * calibData.getFov(dai.CameraBoardSocket.RGB)) - (calibData.getFov(dai.CameraBoardSocket.RGB)/2)
-                if direction < -15:
-                    body_rel_direction = "left"
-                elif direction > 15:
-                    body_rel_direction = "right"
-                else:
-                    body_rel_direction = "center"
+            
                 audio = "text_to_speech.mp3"
-                speech.direction_distance(audio, round((detection.spatialCoordinates.z/1000),2), abs(round(direction)), highest_priority_obj[0], body_rel_direction)
                 
                 #speech.speed_setter(audio, 2)
-
+                speech.direction_distance(audio, round((detection.spatialCoordinates.z/1000),2), abs(round(direction)), highest_priority_obj[0], body_rel_direction)
                 audio = multiprocessing.Process(target=speech.play_audio, args=((audio),))
                 audio.start()
 
@@ -255,19 +252,17 @@ def main():
             if (highest_priority_obj[0] is not None and "audio" in locals() and audio_alive == False):
                 object_x_average = ((xmin + xmin)/2)/width
                 direction = (object_x_average * calibData.getFov(dai.CameraBoardSocket.RGB)) - (calibData.getFov(dai.CameraBoardSocket.RGB)/2)
-                if direction < -15:
-                    body_rel_direction = "left"
-                elif direction > 15:
-                    body_rel_direction = "right"
-                else:
-                    body_rel_direction = "center"
                 audio = "text_to_speech.mp3"
-                speech.direction_distance(audio, round((detection.spatialCoordinates.z/1000),2), abs(round(direction)), highest_priority_obj[0], body_rel_direction)
 
                 #speech.speed_setter(audio, 2)
 
                 audio = multiprocessing.Process(target=speech.play_audio, args=((audio),))
                 audio.start()
+                
+                
+                
+                
+                
 
             cv2.putText(frame, "NN fps: {:.2f}".format(fps), (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, color)
             cv2.imshow("depth", depthFrameColor)
