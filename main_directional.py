@@ -6,8 +6,10 @@ import depthai as dai
 import numpy as np
 import time
 import os
-from utils import speech, gmaps
+from utils import speech, gmaps, audio_positioning
 import multiprocessing
+from synthesizer import Player, Synthesizer, Waveform, Writer
+from openal import oalOpen, Listener
 
 '''
 Spatial Tiny-yolo example
@@ -58,10 +60,12 @@ detection_weights = {
     "dog": 4, 
 }
 
-syncNN = True
+#value in meter for objects in radius to alert to user
+alert_distance = 2 
 
-#Boolean for setting if audio multiprocess is done
-audio_alive = False
+source = oalOpen("temp/test_synthesis.wav")
+
+syncNN = True
 
 # Create pipeline
 pipeline = dai.Pipeline()
@@ -151,6 +155,9 @@ def main():
         printOutputLayersOnce = True
 
         loop_iter = 0
+        audio_positioning.setup()
+        audio_positioning.mute()
+        
         while True:
             inPreview = previewQueue.get()
             inDet = detectionNNQueue.get()
@@ -217,11 +224,7 @@ def main():
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, cv2.FONT_HERSHEY_SIMPLEX)
 
             #HFOV: 68.7938003540039
-            
-            #TODO, make a center direction for low degrees !!!
-            #TODO, create a dictionary of labels and values assigning weights to different objects and which one takes priority for alerting the user
-            #TODO find movement of object by how fast it moves in pixels, ex: if car is moving fast then alert immediatley
-            
+            #TODO find movement of object by how fast it moves in pixels, ex: if car is moving fast then alert immediatley  
                 
             #Searches for highest priority object detected
             highest_priority_obj = (None, 0)
@@ -229,40 +232,30 @@ def main():
                 if label in detection_weights and detection_weights[label] > highest_priority_obj[1]:
                     highest_priority_obj = (label, detection_weights[label]) 
 
-
-
-            #Audio file begins to play for anything in range of 0-2 meters
-
-            if (highest_priority_obj[0] is not None and loop_iter == 0):
-                object_x_average = ((xmin + xmin)/2)/width
-                direction = (object_x_average * calibData.getFov(dai.CameraBoardSocket.RGB)) - (calibData.getFov(dai.CameraBoardSocket.RGB)/2)
-            
-                audio = "text_to_speech.mp3"
-                
-                #speech.speed_setter(audio, 2)
-                speech.direction_distance(audio, round((detection.spatialCoordinates.z/1000),2), abs(round(direction)), highest_priority_obj[0], body_rel_direction)
-                audio = multiprocessing.Process(target=speech.play_audio, args=((audio),))
-                audio.start()
-
-                loop_iter = loop_iter + 1
-
-            if "audio" in locals():
-                audio_alive = audio.is_alive()
-
-            if (highest_priority_obj[0] is not None and "audio" in locals() and audio_alive == False):
-                object_x_average = ((xmin + xmin)/2)/width
-                direction = (object_x_average * calibData.getFov(dai.CameraBoardSocket.RGB)) - (calibData.getFov(dai.CameraBoardSocket.RGB)/2)
-                audio = "text_to_speech.mp3"
-
-                #speech.speed_setter(audio, 2)
-
-                audio = multiprocessing.Process(target=speech.play_audio, args=((audio),))
-                audio.start()
-                
-                
-                
-                
-                
+            if highest_priority_obj[0]:  
+                distance = round((detection.spatialCoordinates.z/1000),2)
+                if distance <= alert_distance:  
+                    audio_positioning.unmute()
+                    object_x_average = ((xmin + xmin)/2)/width              
+                    angle = (object_x_average * calibData.getFov(dai.CameraBoardSocket.RGB)) - (calibData.getFov(dai.CameraBoardSocket.RGB)/2)
+                    
+                    x = distance * np.sin(np.deg2rad(angle))
+                    y = distance * np.cos(np.deg2rad(angle))
+                    
+                    new_pitch = 5 * (1 - (distance/alert_distance))
+                    
+                    audio_positioning.set_pitch(new_pitch)
+                    
+                    #TODO
+                    #Use positions from round((detection.spatialCoordinates.x/1000),2), round((detection.spatialCoordinates.y/1000),2), round((detection.spatialCoordinates.z/1000),2)
+                    #For positions of x, y, x respectively, simply plug into adjust position
+                    #Ex: audio_positioning.adjust_position([detection.spatialCoordinates.x, detection.spatialCoordinates.y, detection.spatialCoordinates.z])
+                    
+                    #audio_positioning.adjust_position([x*5, y*5, 0])
+                    
+            else:
+                audio_positioning.mute()
+                                                
 
             cv2.putText(frame, "NN fps: {:.2f}".format(fps), (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, color)
             cv2.imshow("depth", depthFrameColor)
