@@ -244,12 +244,27 @@ def main():
                     
                     new_pitch = 5 * (1 - (distance/alert_distance))
                     
-                    audio_positioning.set_pitch(new_pitch)
+                    #audio_positioning.set_pitch(new_pitch)
+                    
+                    x, y, z = round((detection.spatialCoordinates.x/100),2), round((detection.spatialCoordinates.y/100),2), round((detection.spatialCoordinates.z/100),2)
+                    #x, y, z = detection.spatialCoordinates.x, detection.spatialCoordinates.y, detection.spatialCoordinates.z
+                    
+                    print("x", x)
+                    print("y", y)
+                    print("z", z)
+                    
+                    #TODO
+                    #Ignore any zero values of z or x and y in order to avoid outliers
+                    
+                    audio_positioning.adjust_position([x, y, 0])
                     
                     #TODO
                     #Use positions from round((detection.spatialCoordinates.x/1000),2), round((detection.spatialCoordinates.y/1000),2), round((detection.spatialCoordinates.z/1000),2)
                     #For positions of x, y, x respectively, simply plug into adjust position
                     #Ex: audio_positioning.adjust_position([detection.spatialCoordinates.x, detection.spatialCoordinates.y, detection.spatialCoordinates.z])
+                    
+                    #TODO
+                    #Use pyinstaller to create an executable of this program for easier access and add it as a release on github
                     
                     #audio_positioning.adjust_position([x*5, y*5, 0])
                     

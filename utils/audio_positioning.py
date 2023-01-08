@@ -8,7 +8,7 @@ listener = Listener()
 
 def setup():
     source.set_looping(True)
-    listener.set_gain(5)
+    listener.set_gain(2)
     source.play()
 
 def set_pitch(value):
