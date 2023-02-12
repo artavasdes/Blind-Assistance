@@ -190,6 +190,9 @@ def main():
             #List for tracking all objects detected in each frame
             detected_frame_objects = []
 
+
+
+
             # If the frame is available, draw bounding boxes on it and show the frame
             height = frame.shape[0]
             width  = frame.shape[1]
@@ -212,7 +215,7 @@ def main():
                 y2 = int(detection.ymax * height)
                 try:
                     label = labelMap[detection.label]
-                    detected_frame_objects.append(label)
+                    detected_frame_objects.append((label, detection))
                 except:
                     label = detection.label
                 cv2.putText(frame, str(label), (x1 + 10, y1 + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
@@ -223,16 +226,34 @@ def main():
                 
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, cv2.FONT_HERSHEY_SIMPLEX)
 
+
+
+
+
             #HFOV: 68.7938003540039
             #TODO find movement of object by how fast it moves in pixels, ex: if car is moving fast then alert immediatley  
                 
             #Searches for highest priority object detected
-            highest_priority_obj = (None, 0)
-            for label in detected_frame_objects:
-                if label in detection_weights and detection_weights[label] > highest_priority_obj[1]:
-                    highest_priority_obj = (label, detection_weights[label]) 
+            highest_priority_obj = (None, 0) #detected_frame_objects index, detection weight
 
-            if highest_priority_obj[0]:  
+            for label_object_pair in detected_frame_objects:
+
+                if label_object_pair[0] in detection_weights.keys() and detection_weights[label_object_pair[0]] > highest_priority_obj[1]:
+                    highest_priority_obj = (detected_frame_objects.index(label_object_pair), detection_weights[label_object_pair[0]])
+
+                #If both are the same priority, then choose closest object
+                elif label_object_pair[0] in detection_weights.keys() and detection_weights[label_object_pair[0]] == highest_priority_obj[1]:
+
+                    if label_object_pair[1].spatialCoordinates.z > detected_frame_objects[highest_priority_obj[0]][1].spatialCoordinates.z:
+
+                        highest_priority_obj = (detected_frame_objects.index(label_object_pair), detection_weights[label_object_pair[0]])
+
+
+
+
+
+            if highest_priority_obj[0] is not None:
+                detection = detected_frame_objects[highest_priority_obj[0]][1]
                 distance = round((detection.spatialCoordinates.z/1000),2)
                 if distance <= alert_distance:  
                     audio_positioning.unmute()
@@ -249,9 +270,6 @@ def main():
                     x, y, z = round((detection.spatialCoordinates.x/100),2), round((detection.spatialCoordinates.y/100),2), round((detection.spatialCoordinates.z/100),2)
                     #x, y, z = detection.spatialCoordinates.x, detection.spatialCoordinates.y, detection.spatialCoordinates.z
                     
-                    print("x", x)
-                    print("y", y)
-                    print("z", z)
                     
                     #TODO
                     #Ignore any zero values of z or x and y in order to avoid outliers
