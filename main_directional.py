@@ -61,7 +61,7 @@ detection_weights = {
 }
 
 #value in meter for objects in radius to alert to user
-alert_distance = 2 
+alert_distance = 5
 
 source = oalOpen("temp/test_synthesis.wav")
 
@@ -256,7 +256,7 @@ def main():
                     #TODO
                     #Ignore any zero values of z or x and y in order to avoid outliers
                     
-                    audio_positioning.adjust_position([x, y, 0])
+                    audio_positioning.adjust_position([(-1 * x), y, 0])
                     
                     #TODO
                     #Use positions from round((detection.spatialCoordinates.x/1000),2), round((detection.spatialCoordinates.y/1000),2), round((detection.spatialCoordinates.z/1000),2)
