@@ -10,7 +10,9 @@ The purpose of this project is to develop a system that assists the visually imp
 
 
 # Hardware
-
+- Nvidia Jetson Nano
+- Luxonis Oak-D Camera
+- Battery Pack
 ![Alt text](images/4.png)
 
 ## Notes
