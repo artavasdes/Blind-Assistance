@@ -9,6 +9,10 @@ The purpose of this project is to develop a system that assists the visually imp
 ![Alt text](images/3.png)
 
 
+# Hardware
+
+![Alt text](images/4.png)
+
 ## Notes
  
 Rubberband Installation: add the FOLDER path to the environment variables, not the exe
